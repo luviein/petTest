@@ -1,41 +1,70 @@
 // src/pages/SignUp.jsx
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth"; // Added sendEmailVerification
 import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../firebase"; // Ensure firebase.js is correctly configured and exports auth, db
+import { auth, db } from "../firebase";
+import ReCAPTCHA from "react-google-recaptcha"; // Import ReCAPTCHA
 
 export default function SignUp() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState(""); // State for username
-  const [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState("");
+  const [loading, setLoading] = useState(false); // Used for form submission button
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null); // For success messages like email verification sent
+
+  // ReCAPTCHA states and handler
+  const [recaptchaValue, setRecaptchaValue] = useState(null);
+
+  const onRecaptchaChange = (value) => {
+    setRecaptchaValue(value);
+  };
 
   const handleSignUp = async (e) => {
-    e.preventDefault(); // Prevent default form submission
+    e.preventDefault();
     setLoading(true);
-    setError(null); // Clear previous errors
+    setError(null);
+    setMessage(null); // Clear previous messages
+
+    if (!recaptchaValue) {
+      setError("Please complete the reCAPTCHA verification.");
+      setLoading(false);
+      return;
+    }
 
     try {
+      // 1. Create user with email and password using Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
       console.log("Firebase Auth User created:", user);
 
-      const userDocRef = doc(db, "users", user.uid); // Correctly uses user.uid as doc ID
+      // 2. Create user document in Firestore using user.uid as the document ID
+      const userDocRef = doc(db, "users", user.uid);
       await setDoc(userDocRef, {
-        username: username, // Store the username from the form
+        username: username,
         email: user.email,
-        createdAt: new Date(), // Timestamp for when the user was created
-        currency: 0, // Initial currency
-        profileImageUrl: "", // Empty string for profile image URL
+        createdAt: new Date(),
+        currency: 0,
+        profileImageUrl: "",
       });
 
       console.log("User profile created in Firestore for UID:", user.uid);
 
-      navigate("/userhome");
+      // 3. Send email verification (as per your original code)
+      await sendEmailVerification(user);
+      setMessage("A verification email has been sent to your inbox. Please verify your email before logging in.");
+      console.log("Verification email sent.");
+
+      // 4. Sign out the user immediately after signup (as per your original code)
+      // This is common when email verification is required before login
+      await auth.signOut();
+      console.log("User signed out after signup.");
+
+      // Optionally navigate to sign in page after successful signup and sign out
+      // navigate("/signin"); // You can uncomment this if you want to redirect automatically
 
     } catch (err) {
       console.error("Error during sign-up:", err.code, err.message);
@@ -48,13 +77,16 @@ export default function SignUp() {
           errorMessage = "Please enter a valid email address.";
           break;
         case "auth/operation-not-allowed":
-          errorMessage = "Email/password accounts are not enabled. Please check Firebase settings.";
+          errorMessage = "Email/password authentication is not enabled. Please check Firebase settings.";
           break;
         case "auth/weak-password":
           errorMessage = "Password is too weak. It should be at least 6 characters.";
           break;
+        case "auth/network-request-failed":
+          errorMessage = "Network error. Please check your internet connection.";
+          break;
         default:
-          errorMessage = err.message; // Use Firebase's message for other errors
+          errorMessage = err.message;
       }
       setError(errorMessage);
     } finally {
@@ -99,9 +131,22 @@ export default function SignUp() {
             style={styles.input}
           />
         </div>
+
+        {/* ReCAPTCHA Widget */}
+        <div style={styles.recaptchaContainer}>
+          <ReCAPTCHA
+            sitekey="6LfY72crAAAAAIj05fNjW_stli1AB8oaKXHniFPP" // Use your actual site key here
+            onChange={onRecaptchaChange}
+            // Add a ref if you need to call reset() on the recaptcha
+            // ref={recaptchaRef}
+          />
+        </div>
+
         {error && <p style={styles.error}>{error}</p>}
-        <button type="submit" disabled={loading} style={styles.button}>
-          {loading ? "Signing Up..." : "Sign Up"}
+        {message && <p style={styles.successMessage}>{message}</p>} {/* Display success message */}
+
+        <button type="submit" disabled={loading || !recaptchaValue} style={styles.button}>
+          {loading ? "Creating Account..." : "Create Account"}
         </button>
       </form>
       <p style={styles.linkText}>
@@ -115,18 +160,17 @@ const styles = {
   container: {
     display: "flex",
     flexDirection: "column",
-    alignItems: "center", // Keeps contents (heading, form, link text) centered horizontally
-    justifyContent: "center", // <--- Center content vertically within this component's available space
-    // minHeight: "calc(100vh - 60px)", // Removed this here, App.jsx handles the height
+    alignItems: "center",
+    justifyContent: "center",
     padding: "20px",
     backgroundColor: "transparent",
-    width: "100%", // Take full width of its parent container (App.jsx's div)
+    width: "100%",
     boxSizing: "border-box",
-    margin: "auto", // <--- Allows component to be centered by parent's flexbox
+    margin: "auto",
   },
   heading: {
     marginBottom: "20px",
-    color: "white", // <--- Changed header color to white
+    color: "white",
   },
   form: {
     width: "80%",
@@ -142,7 +186,7 @@ const styles = {
   label: {
     marginBottom: "5px",
     fontWeight: "bold",
-    color: "#555", // Keep label color dark for contrast with potentially dark background
+    color: "#555",
   },
   input: {
     padding: "10px",
@@ -151,6 +195,12 @@ const styles = {
     fontSize: "16px",
     width: "100%",
     boxSizing: "border-box",
+  },
+  recaptchaContainer: {
+    display: "flex",
+    justifyContent: "center", // Center the reCAPTCHA widget
+    marginTop: "5px",
+    marginBottom: "5px", // Adjust spacing as needed
   },
   button: {
     padding: "12px 20px",
@@ -168,9 +218,11 @@ const styles = {
   buttonHover: {
     backgroundColor: "#0056b3",
   },
+  // Update buttonDisabled to also include opacity for visual feedback
   buttonDisabled: {
     backgroundColor: "#cccccc",
     cursor: "not-allowed",
+    opacity: 0.7, // Added opacity for disabled state
   },
   error: {
     color: "red",
@@ -179,9 +231,16 @@ const styles = {
     fontSize: "14px",
     textAlign: "center",
   },
+  successMessage: { // New style for success messages
+    color: "green",
+    marginTop: "-10px",
+    marginBottom: "5px",
+    fontSize: "14px",
+    textAlign: "center",
+  },
   linkText: {
     marginTop: "20px",
-    color: "#555", // Keep link text dark for contrast
+    color: "#555",
   },
   link: {
     color: "#007bff",

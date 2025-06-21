@@ -1,23 +1,17 @@
 import { Link, useNavigate } from "react-router-dom";
 import { auth } from "../firebase";
-import { signOut } from "firebase/auth"; 
+import { signOut } from "firebase/auth";
 import { useEffect, useState, useRef } from "react";
-import { onAuthStateChanged } from "firebase/auth";
 import { useUser } from "../contexts/UserContext";
 
 export default function NavBar() {
   const navigate = useNavigate();
-  const user = useUser(); // get user from context
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { user, loading } = useUser();
+
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setIsLoggedIn(!!user);
-    });
-    return () => unsubscribe();
-  }, []);
+  const isLoggedIn = !!user;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -41,35 +35,23 @@ export default function NavBar() {
     navigate("/");
   };
 
+  if (loading) {
+    return (
+      <nav style={navBarStyle}>
+        <p style={{ color: 'black' }}>Loading navigation...</p>
+      </nav>
+    );
+  }
+
   return (
     <nav
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        height: "60px",
-        backgroundColor: "#fff",
-        borderBottom: "1px solid #ddd",
-        display: "flex",
-        alignItems: "center",
-        padding: "0 20px",
-        zIndex: 1000,
-        boxSizing: "border-box",
-        color: "black",
-        justifyContent: "space-between",
-      }}
+      style={navBarStyle}
     >
       {/* Left side: Logo and Home with dropdown */}
       <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
         <Link
           to={isLoggedIn ? "/userhome" : "/"}
-          style={{
-            textDecoration: "none",
-            color: "black",
-            fontWeight: "bold",
-            fontSize: "18px",
-          }}
+          style={brandLinkStyle}
         >
           🐾 Virtual Pet
         </Link>
@@ -78,15 +60,7 @@ export default function NavBar() {
           <div style={{ position: "relative" }} ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen((open) => !open)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "black",
-                fontWeight: "bold",
-                cursor: "pointer",
-                fontSize: "inherit",
-                padding: 0,
-              }}
+              style={dropdownButtonStyle}
               aria-haspopup="true"
               aria-expanded={dropdownOpen}
             >
@@ -96,18 +70,7 @@ export default function NavBar() {
             {dropdownOpen && (
               <div
                 className="dropdown-menu"
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  left: 0,
-                  backgroundColor: "white",
-                  border: "1px solid #ccc",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                  borderRadius: "4px",
-                  marginTop: "5px",
-                  minWidth: "150px",
-                  zIndex: 2000,
-                }}
+                style={dropdownMenuStyle}
               >
                 <Link to="/create-pet" className="dropdown-link" style={dropdownLinkStyle}>
                   Create a Pet
@@ -145,6 +108,53 @@ export default function NavBar() {
   );
 }
 
+const navBarStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  height: "60px",
+  backgroundColor: "#fff",
+  borderBottom: "1px solid #ddd",
+  display: "flex",
+  alignItems: "center",
+  padding: "0 20px",
+  zIndex: 1000,
+  boxSizing: "border-box",
+  color: "black",
+  justifyContent: "space-between",
+};
+
+const brandLinkStyle = {
+  textDecoration: "none",
+  color: "black",
+  fontWeight: "bold",
+  fontSize: "18px",
+};
+
+const dropdownButtonStyle = {
+  background: "none",
+  border: "none",
+  color: "black",
+  fontWeight: "bold",
+  cursor: "pointer",
+  fontSize: "inherit",
+  padding: 0,
+};
+
+const dropdownMenuStyle = {
+  position: "absolute",
+  top: "100%",
+  left: 0,
+  backgroundColor: "white",
+  border: "1px solid #ccc",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+  borderRadius: "4px",
+  marginTop: "5px",
+  minWidth: "150px",
+  zIndex: 2000,
+};
+
 const dropdownLinkStyle = {
   display: "block",
   padding: "10px 15px",
@@ -154,4 +164,28 @@ const dropdownLinkStyle = {
   cursor: "pointer",
   backgroundColor: "white",
   transition: "background-color 0.2s ease",
+  // "&:hover": { // REMOVE THIS
+  //   backgroundColor: "#f5f5f5",
+  // },
 };
+
+// Also remove them from UserProfile.jsx styles if you put them there.
+// (I will assume you did as they were in the previous UserProfile.jsx code)
+// You might have similar issues in UserProfile.jsx
+// Check `ownerActionButton` and `visitorActionButton` in UserProfile.jsx as well
+
+// Example of ownerActionButton (ensure no "&:hover")
+// ownerActionButton: {
+//     padding: "12px 25px",
+//     backgroundColor: "#28a745",
+//     color: "white",
+//     border: "none",
+//     borderRadius: "8px",
+//     cursor: "pointer",
+//     fontSize: "1em",
+//     fontWeight: "bold",
+//     transition: "background-color 0.3s ease",
+//     // "&:hover": { // REMOVE THIS IF PRESENT IN UserProfile.jsx
+//     //   backgroundColor: "#218838",
+//     // },
+//   },

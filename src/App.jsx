@@ -12,7 +12,7 @@ import { UserProvider } from "./contexts/UserContext";
 
 export default function App() {
   return (
-    <Router basename="/petTest">
+    <Router basename="/petTest/">
       <UserProvider>
         <NavBar />
         <div
