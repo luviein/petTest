@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 
 export default function Home() {
   return (
-    <div style={{ maxWidth: 600, width: "100%", textAlign: "center", paddingTop: "15%" }}>
+    <div style={{ maxWidth: 600, width: "100%", textAlign: "center" }}>
       <h1>🐾 Welcome to Virtual Pet World</h1>
       <p>Start raising your digital pet today!</p>
       <div style={{ marginTop: 20 }}>
