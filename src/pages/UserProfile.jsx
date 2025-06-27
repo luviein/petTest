@@ -1,8 +1,7 @@
-import React from "react";
+import React, { useState, useEffect } from "react"; // Removed useRef as it's not needed without file input
 import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { db } from "../firebase"; // 'storage' import removed
+import { doc, getDoc, updateDoc } from "firebase/firestore"; // No storage-specific imports needed
 import { useUser } from "../contexts/UserContext";
 
 export default function UserProfile() {
@@ -12,6 +11,15 @@ export default function UserProfile() {
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // States related to image upload (removed as storage is removed)
+  // const [isUploading, setIsUploading] = useState(false);
+  // const [uploadError, setUploadError] = useState(null);
+  // const fileInputRef = useRef(null); // Ref for file input (removed)
+
+  // State for pet updates (retained for featured pet functionality)
+  const [isUpdatingPets, setIsUpdatingPets] = useState(false);
+  const [petUpdateError, setPetUpdateError] = useState(null);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -44,13 +52,60 @@ export default function UserProfile() {
     fetchUserData();
   }, [userId]);
 
-  // --- DEBUGGING LOGS ---
+  // handleProfilePicUpload function removed
+
+  // Handle toggling a pet as featured (retained)
+  const handleFeatureToggle = async (toggledPetName) => {
+    if (!currentUser || !currentUser.uid || !profileData || !isOwner) {
+        console.warn("Attempt to toggle featured pet by non-owner or unauthenticated user.");
+        setPetUpdateError("Authentication error or not authorized.");
+        return;
+    }
+
+    setIsUpdatingPets(true);
+    setPetUpdateError(null); // Clear previous errors
+
+    try {
+        const currentPets = Array.isArray(profileData.pets) ? [...profileData.pets] : Object.values(profileData.pets);
+
+        const updatedPets = currentPets.map(pet => {
+            if (pet.petName === toggledPetName) {
+                const newFeaturedStatus = !pet.featured;
+                return { ...pet, featured: newFeaturedStatus };
+            } else {
+                return { ...pet, featured: false };
+            }
+        });
+
+        const userDocRef = doc(db, "users", currentUser.uid);
+        await updateDoc(userDocRef, {
+            pets: updatedPets,
+        });
+
+        setProfileData(prevData => ({
+            ...prevData,
+            pets: updatedPets,
+        }));
+
+    } catch (err) {
+        console.error("Error toggling featured pet:", err);
+        setPetUpdateError("Failed to update featured pet status. Please try again.");
+    } finally {
+        setIsUpdatingPets(false);
+    }
+  };
+
+
+  // --- DEBUGGING LOGS --- (updated to reflect removed storage states)
   console.log("--- UserProfile Debug ---");
   console.log("Current URL userId:", userId);
   console.log("Logged-in currentUser:", currentUser);
   console.log("currentUser UID:", currentUser?.uid);
   console.log("Is user context loading (userLoading)?", userLoading);
   console.log("Is profile data loading (loading)?", loading);
+  console.log("Is updating pets (isUpdatingPets)?", isUpdatingPets);
+  console.log("Pet Update Error:", petUpdateError);
+
 
   const isOwner = currentUser?.uid === userId;
   console.log("Calculated isOwner:", isOwner);
@@ -58,23 +113,30 @@ export default function UserProfile() {
   // --- END DEBUGGING LOGS ---
 
   if (loading || userLoading) {
-    return <div style={styles.loadingContainer}><p style={styles.loadingText}>Loading profile...</p></div>;
+    return (
+      <div style={styles.loadingContainer}>
+        <p style={styles.loadingText}>Loading profile...</p>
+      </div>
+    );
   }
 
   if (error) {
-    return <div style={styles.container}><p style={styles.errorText}>{error}</p></div>;
+    return (
+      <div style={styles.container}>
+        <p style={styles.errorText}>{error}</p>
+      </div>
+    );
   }
 
   if (!profileData) {
-    return <div style={styles.container}><p style={styles.errorText}>No profile data available.</p></div>;
+    return (
+      <div style={styles.container}>
+        <p style={styles.errorText}>No profile data available.</p>
+      </div>
+    );
   }
 
-  const {
-    username,
-    profileImageUrl,
-    createdAt,
-    pets = [],
-  } = profileData;
+  const { username, profileImageUrl, createdAt, pets = [] } = profileData;
 
   const petsArray = Array.isArray(pets) ? pets : Object.values(pets);
 
@@ -87,26 +149,30 @@ export default function UserProfile() {
       <div style={styles.section}>
         <div style={styles.buttonGroup}>
           {isOwner ? (
+            // Upload profile picture button and input removed
             <button style={styles.ownerActionButton}>Profile Settings</button>
           ) : (
             <button style={styles.visitorActionButton}>Add Friend</button>
           )}
         </div>
+        {/* uploadError display removed */}
+        {petUpdateError && <p style={styles.errorText}>{petUpdateError}</p>}
+
 
         <div style={styles.flexContainer}>
-          {/* COMBINED PROFILE PICTURE AND ABOUT USER CARD */}
           <div style={styles.card}>
-            <h3 style={styles.cardHeading}>About {username}</h3> {/* Main heading for the combined card */}
+            <h3 style={styles.cardHeading}>About {username}</h3>
             <img
-              src={profileImageUrl || "https://via.placeholder.com/150/007bff/FFFFFF?text=No+Image"}
+              src={
+                profileImageUrl ||
+                "https://via.placeholder.com/150/007bff/FFFFFF?text=No+Image"
+              }
               alt="Profile"
               style={styles.profileImage}
             />
-            <p>Joined on {createdAt?.toDate?.().toLocaleDateString() || 'N/A'}</p>
-            {/* Add more descriptive text or bio field here if available in profileData */}
+            <p>Joined on {createdAt?.toDate?.().toLocaleDateString() || "N/A"}</p>
           </div>
 
-          {/* FEATURED PET CARD (remains separate) */}
           <div style={styles.card}>
             <h3 style={styles.cardHeading}>Featured Pet</h3>
             {featuredPet ? (
@@ -128,30 +194,45 @@ export default function UserProfile() {
           </div>
         </div>
 
-        {/* PETS SECTION */}
         <div style={styles.section}>
           <h3 style={styles.sectionHeading}>All Pets</h3>
           {petsArray.length > 0 ? (
-            <div style={styles.petsGrid}>
-              {petsArray.map((pet, index) => (
-                <div key={index} style={styles.petCard}>
-                  <h4 style={styles.petCardHeading}>{pet.petName}</h4>
-                  <p>Hunger: {pet.hunger}</p>
-                  <p>Boredom: {pet.boredom}</p>
-                  <p>Food Collected: {Object.keys(pet.collectedItems?.food || {}).length}</p>
-                  <p>Toys Collected: {Object.keys(pet.collectedItems?.toys || {}).length}</p>
-                  {pet.imageUrl && (
-                    <img
-                      src={pet.imageUrl}
-                      alt={pet.petName}
-                      style={styles.petCardImage}
-                    />
-                  )}
-                </div>
-              ))}
+            <div style={styles.petsGridContainer}>
+              <div style={styles.petsGrid}>
+                {petsArray.map((pet, index) => (
+                  <div key={index} style={styles.petCard}>
+                    {isOwner && (
+                        <span
+                            style={pet.featured ? styles.starIconFeatured : styles.starIcon}
+                            onClick={() => handleFeatureToggle(pet.petName)}
+                            title={pet.featured ? "Deselect Featured Pet" : "Set as Featured Pet"}
+                        >
+                            {pet.featured ? '⭐' : '☆'}
+                        </span>
+                    )}
+
+                    <h4 style={styles.petCardHeading}>{pet.petName}</h4>
+                    <p>Hunger: {pet.hunger}</p>
+                    <p>Boredom: {pet.boredom}</p>
+                    <p>Food Collected: {Object.keys(pet.collectedItems?.food || {}).length}</p>
+                    <p>Toys Collected: {Object.keys(pet.collectedItems?.toys || {}).length}</p>
+                    {pet.imageUrl && (
+                      <img
+                        src={pet.imageUrl}
+                        alt={pet.petName}
+                        style={styles.petCardImage}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <p>{isOwner ? "You don't have any pets yet." : `${username} doesn't have any pets yet.`}</p>
+            <p>
+              {isOwner
+                ? "You don't have any pets yet."
+                : `${username} doesn't have any pets yet.`}
+            </p>
           )}
         </div>
       </div>
@@ -186,6 +267,8 @@ const styles = {
     color: "red",
     fontSize: "1.1em",
     textAlign: "center",
+    marginTop: "10px",
+    marginBottom: "10px",
   },
   heading: {
     color: "white",
@@ -218,7 +301,6 @@ const styles = {
     fontSize: "1em",
     fontWeight: "bold",
     transition: "background-color 0.3s ease",
-    // REMOVED: "&:hover": { backgroundColor: "#218838" },
   },
   visitorActionButton: {
     padding: "12px 25px",
@@ -230,7 +312,6 @@ const styles = {
     fontSize: "1em",
     fontWeight: "bold",
     transition: "background-color 0.3s ease",
-    // REMOVED: "&:hover": { backgroundColor: "#0056b3" },
   },
   flexContainer: {
     display: "flex",
@@ -272,6 +353,14 @@ const styles = {
     border: "2px solid #28a745",
     marginTop: "10px",
   },
+  petsGridContainer: {
+    maxHeight: '780px',
+    overflowY: 'auto',
+    paddingRight: '15px',
+    boxSizing: 'border-box',
+    margin: '0 auto',
+    width: '100%',
+  },
   petsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
@@ -280,6 +369,7 @@ const styles = {
     width: "100%",
   },
   petCard: {
+    position: 'relative',
     backgroundColor: "white",
     border: "1px solid #e0e0e0",
     borderRadius: "10px",
@@ -299,5 +389,25 @@ const styles = {
     objectFit: "cover",
     border: "1px solid #ccc",
     marginTop: "10px",
+  },
+  starIcon: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    fontSize: '1.5em',
+    cursor: 'pointer',
+    color: '#ccc',
+    transition: 'color 0.2s ease',
+    zIndex: 1,
+  },
+  starIconFeatured: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    fontSize: '1.5em',
+    cursor: 'pointer',
+    color: 'gold',
+    transition: 'color 0.2s ease',
+    zIndex: 1,
   },
 };
